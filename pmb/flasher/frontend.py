@@ -27,12 +27,16 @@ import pmb.chroot.initfs
 import pmb.chroot.other
 import pmb.export.frontend
 import pmb.helpers.frontend
+import pmb.parse.kconfig
 
 
 def kernel(args):
     # Rebuild the initramfs, just to make sure (see #69)
     flavor = pmb.helpers.frontend._parse_flavor(args)
     pmb.chroot.initfs.build(args, flavor, "rootfs_" + args.device)
+
+    # Check kernel config
+    pmb.parse.kconfig.check(args, flavor)
 
     # Generate the paths and run the flasher
     if args.action_flasher == "boot":
@@ -75,6 +79,12 @@ def list_devices(args):
 
 
 def sideload(args):
+    method = args.flash_method or args.deviceinfo["flash_methods"]
+    cfg = pmb.config.flashers[method]
+
+    # Install depends
+    pmb.chroot.apk.install(args, cfg["depends"])
+
     # Mount the buildroot
     suffix = "buildroot_" + args.deviceinfo["arch"]
     mountpoint = "/mnt/" + suffix

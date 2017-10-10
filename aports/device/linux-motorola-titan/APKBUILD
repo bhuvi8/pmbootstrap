@@ -24,7 +24,7 @@ case $pkgver in
 	*.*.*)  _kernver=${pkgver%.*};;
 	*.*) _kernver=$pkgver;;
 esac
-pkgrel=4
+pkgrel=5
 arch="armhf"
 pkgdesc="Motorola Moto G 2014 kernel from LineageOS"
 url="https://github.com/LineageOS/android_kernel_motorola_msm8226"
@@ -75,10 +75,10 @@ prepare() {
 	fi
 
 	# gcc6 support
-	cp -v "$srcdir/compiler-gcc6.h" "$ksrcdir/include/linux/" || return 1
+	cp -v "$srcdir/compiler-gcc6.h" "$ksrcdir/include/linux/"
 
 	mkdir -p "$srcdir"/build
-	cp "$srcdir"/$_config "$srcdir"/build/.config || return 1
+	cp "$srcdir"/$_config "$srcdir"/build/.config
 	make -C "$ksrcdir" O="$srcdir"/build ARCH="$_carch" HOSTCC="$HOSTCC" \
 		silentoldconfig
 }
@@ -87,7 +87,7 @@ prepare() {
 
 # this is so we can do: 'abuild menuconfig' to reconfigure kernel
 menuconfig() {
-	cd "$srcdir"/build || return 1
+	cd "$srcdir"/build
 	make ARCH="$_carch" menuconfig
 	cp .config "$startdir"/$_config
 }
@@ -97,8 +97,7 @@ build() {
 	unset LDFLAGS
 
 	make ARCH="$_carch" CC="${CC:-gcc}" \
-		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-Alpine" \
-		|| return 1
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-Alpine"
 }
 
 package() {
@@ -109,7 +108,7 @@ package() {
 		"$pkgdir/usr/share/kernel/$_flavor/kernel.release"
 }
 
-sha512sums="565d1e2f7fe5fa62f9b8273ebdfec56457d36f05ad09fc4fed3ad4e4d00ff6079af59acad65e3e43d3fcde1b1f5105e2fc98518131f1262cd846f3288294f8b8  linux-motorola-titan-09cff47d6b79b73ecc3461e227abf09faaa9e754.tar.gz
+sha512sums="7e0fb6b0b5c4de67bfdcbc9a32e47ffd3cba3094165d76926585edf25d4a3254e0bfc10c9611cf8d20232b055ab7e07e9818e7cdc3bccd0d3414a1cb7419eb37  linux-motorola-titan-09cff47d6b79b73ecc3461e227abf09faaa9e754.tar.gz
 9975a82511dc20ef0c771a84e1021e9358575a3c50847750567d03d3bccef088b099bcfa7145d5358f6c49c22dbbf401f49da3e60f87dc6486a1394119e77f3a  config-motorola-titan.armhf
 d80980e9474c82ba0ef1a6903b434d8bd1b092c40367ba543e72d2c119301c8b2d05265740e4104ca1ac5d15f6c4aa49e8776cb44264a9a28dc551e0d1850dcc  compiler-gcc6.h
 ea1d3b5a234fa565e3c1a792de48f4fc4e6023d281d303c8e319c7ef28edc5739ab0e4dea0139a41f0a5c7d03e27921ccaa214fd0ac5c72245a094ce60128864  00_fix_return_address.patch

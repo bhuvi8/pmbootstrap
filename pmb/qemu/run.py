@@ -19,6 +19,7 @@ along with pmbootstrap.  If not, see <http://www.gnu.org/licenses/>.
 import logging
 import os
 import shutil
+import re
 
 import pmb.build
 import pmb.chroot
@@ -62,7 +63,49 @@ def which_qemu(args, arch):
                            " run qemu.")
 
 
-def qemu_command(args, arch, device, img_path):
+def which_spice(args):
+    """
+    Finds some SPICE executable or raises an exception otherwise
+    :returns: tuple (spice_was_found, path_to_spice_executable)
+    """
+    executables = ["remote-viewer", "spicy"]
+    for executable in executables:
+        if shutil.which(executable):
+            return executable
+    return None
+
+
+def spice_command(args):
+    """
+    Generate the full SPICE command with arguments connect to
+    the virtual machine
+    :returns: tuple (dict, list), configuration parameters and spice command
+    """
+    parameters = {
+        "spice_addr": "127.0.0.1",
+        "spice_port": "8077"
+    }
+    if not args.use_spice:
+        parameters["enable_spice"] = False
+        return parameters, []
+    spice_binary = which_spice(args)
+    if not spice_binary:
+        parameters["enable_spice"] = False
+        return parameters, []
+    spice_addr = parameters["spice_addr"]
+    spice_port = parameters["spice_port"]
+    commands = {
+        "spicy": ["spicy", "-h", spice_addr, "-p", spice_port],
+        "remote-viewer": [
+            "remote-viewer",
+            "spice://" + spice_addr + "?port=" + spice_port
+        ]
+    }
+    parameters["enable_spice"] = True
+    return parameters, commands[spice_binary]
+
+
+def qemu_command(args, arch, device, img_path, config):
     """
     Generate the full qemu command with arguments to run postmarketOS
     """
@@ -131,7 +174,51 @@ def qemu_command(args, arch, device, img_path):
     else:
         logging.info("Warning: qemu is not using KVM and will run slower!")
 
+    # QXL / SPICE (2D acceleration support)
+    if config["enable_spice"]:
+        command += ["-vga", "qxl"]
+        command += ["-spice",
+                    "port={spice_port},addr={spice_addr}".format(**config) +
+                    ",disable-ticketing"]
+
     return command
+
+
+def resize_image(args, img_size_new, img_path):
+    """
+    Truncates the system image to a specific size. The value must be larger than the
+    current image size, and it must be specified in MiB or GiB units (powers of 1024).
+
+    :param img_size_new: new image size in M or G
+    :param img_path: the path to the system image
+    """
+    # current image size in bytes
+    img_size = os.path.getsize(img_path)
+
+    # make sure we have at least 1 integer followed by either M or G
+    pattern = re.compile("^[0-9]+[M|G]$")
+    if not pattern.match(img_size_new):
+        raise RuntimeError("You must specify the system image size in [M]iB or [G]iB, e.g. 2048M or 2G")
+
+    # remove M or G and convert to bytes
+    img_size_new_bytes = int(img_size_new[:-1]) * 1024 * 1024
+
+    # convert further for G
+    if (img_size_new[-1] == "G"):
+        img_size_new_bytes = img_size_new_bytes * 1024
+
+    if (img_size_new_bytes >= img_size):
+        logging.info("Setting the system image size to " + img_size_new)
+        pmb.helpers.run.root(args, ["truncate", "-s", img_size_new, img_path])
+    else:
+        # convert to human-readable format
+        # Note: We convert to M here, and not G, so that we don't have to display
+        # a size like 1.25G, since decimal places are not allowed by truncate.
+        # We don't want users thinking they can use decimal numbers, and so in
+        # this example, they would need to use a size greater then 1280M instead.
+        img_size_str = str(round(img_size / 1024 / 1024)) + "M"
+
+        raise RuntimeError("The system image size must be " + img_size_str + " or greater")
 
 
 def run(args):
@@ -141,23 +228,54 @@ def run(args):
     arch = pmb.parse.arch.uname_to_qemu(args.arch_native)
     if args.arch:
         arch = pmb.parse.arch.uname_to_qemu(args.arch)
-    logging.info("Running postmarketOS in QEMU VM (" + arch + ")")
 
     device = pmb.parse.arch.qemu_to_pmos_device(arch)
     img_path = system_image(args, device)
+    spice_parameters, command_spice = spice_command(args)
 
     # Workaround: qemu runs as local user and needs write permissions in the
     # system image, which is owned by root
     if not os.access(img_path, os.W_OK):
         pmb.helpers.run.root(args, ["chmod", "666", img_path])
 
-    command = qemu_command(args, arch, device, img_path)
+    run_spice = spice_parameters["enable_spice"]
+    command = qemu_command(args, arch, device, img_path, spice_parameters)
 
+    logging.info("Running postmarketOS in QEMU VM (" + arch + ")")
     logging.info("Command: " + " ".join(command))
+
+    if args.image_size:
+        resize_image(args, args.image_size, img_path)
+    else:
+        logging.info("NOTE: Run 'pmbootstrap qemu --image-size 2G' to set"
+                     " the system image size when you run out of space!")
+
     print()
-    logging.info("You can connect to the Virtual Machine using the"
+    logging.info("You can connect to the virtual machine using the"
                  " following services:")
     logging.info("(ssh) ssh -p " + str(args.port) + " user@localhost")
     logging.info("(telnet) telnet localhost " + str(args.port + 1))
     logging.info("(telnet debug) telnet localhost " + str(args.port + 2))
-    pmb.helpers.run.user(args, command)
+
+    # SPICE related messages
+    if not run_spice:
+        if args.use_spice:
+            logging.warning("WARNING: Could not find any SPICE client (spicy,"
+                            " remote-viewer) in your PATH, starting without"
+                            " SPICE support!")
+        else:
+            logging.info("NOTE: Consider using --spice for potential"
+                         " performance improvements (2d acceleration)")
+
+    try:
+        process = pmb.helpers.run.user(args, command, background=run_spice)
+
+        # Launch SPICE client
+        if run_spice:
+            logging.info("Command: " + " ".join(command_spice))
+            pmb.helpers.run.user(args, command_spice)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if process:
+            process.terminate()

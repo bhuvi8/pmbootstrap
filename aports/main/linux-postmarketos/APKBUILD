@@ -13,7 +13,7 @@ _config="config-${_flavor}.${CARCH}"
 
 pkgname=linux-${_flavor}
 
-pkgver=4.13.1
+pkgver=4.13.5
 case $pkgver in
 	*.*.*)	_kernver=${pkgver%.*};;
 	*.*) _kernver=$pkgver;;
@@ -61,7 +61,7 @@ prepare() {
 	cd "$ksrcdir"
 	if [ "$_kernver" != "$pkgver" ]; then
 		msg "Applying patch-$pkgver.xz"
-		unxz -c < "$srcdir"/patch-$pkgver.xz | patch -p1 -N || return 1
+		unxz -c < "$srcdir"/patch-$pkgver.xz | patch -p1 -N
 	fi
 
 	# first apply patches in specified order
@@ -84,16 +84,16 @@ prepare() {
 	fi
 
 	mkdir -p "$srcdir"/build
-	cp -v "$srcdir"/$_config "$srcdir"/build/.config || return 1
+	cp -v "$srcdir"/$_config "$srcdir"/build/.config
 	make -C "$ksrcdir" O="$srcdir"/build ARCH="$_carch" HOSTCC="$HOSTCC" \
-		silentoldconfig
+		olddefconfig
 }
 
 
 
 # this is so we can do: 'abuild menuconfig' to reconfigure kernel
 menuconfig() {
-	cd "$srcdir"/build || return 1
+	cd "$srcdir"/build
 	make ARCH="$_carch" menuconfig
 	cp .config "$startdir"/$_config
 }
@@ -108,7 +108,7 @@ build() {
 
 package() {
 	cd "$srcdir/build/arch/${_carch}/boot"
-	
+
 	if [ "$CARCH" == "aarch64" ]; then
 		install -Dm644 "$srcdir/build/arch/${_carch}/boot/Image" \
 			"$pkgdir/boot/vmlinuz-$_flavor"
@@ -131,8 +131,7 @@ package() {
 	make -j1 $_install \
 		ARCH="$_carch" \
 		INSTALL_MOD_PATH="$pkgdir" \
-		INSTALL_DTBS_PATH="$pkgdir/usr/share/dtb" \
-		|| return 1
+		INSTALL_DTBS_PATH="$pkgdir/usr/share/dtb"
 }
 
 
@@ -153,7 +152,7 @@ dev() {
 	mkdir -p "$dir"
 	cp "$srcdir"/$_config "$dir"/.config
 	make -j1 -C "$srcdir"/linux-$_kernver O="$dir" ARCH="$_carch" HOSTCC="$HOSTCC" \
-		silentoldconfig prepare modules_prepare scripts
+		olddefconfig prepare modules_prepare scripts
 
 	# needed for 3rd party modules
 	# https://bugzilla.kernel.org/show_bug.cgi?id=11143
@@ -175,7 +174,7 @@ dev() {
 		-o -path './scripts/*' -prune -o -type f \
 		\( -name 'Makefile*' -o -name 'Kconfig*' -o -name 'Kbuild*' -o \
 		   -name '*.sh' -o -name '*.pl' -o -name '*.lds' \) \
-		-print | cpio -pdm "$dir" || return 1
+		-print | cpio -pdm "$dir"
 	cp -a scripts include "$dir"
 	find $(find arch -name include -type d -print) -type f \
 		| cpio -pdm "$dir"
@@ -189,8 +188,8 @@ dev() {
 }
 
 sha512sums="a557c2f0303ae618910b7106ff63d9978afddf470f03cb72aa748213e099a0ecd5f3119aea6cbd7b61df30ca6ef3ec57044d524b7babbaabddf8b08b8bafa7d2  linux-4.13.tar.xz
-03407ddd93db7188928ff7f689dff01afaa0119655e311440a8a286907d8f27bf058487b8f859a588f7f06bda98abe24998fc580f917df2f96f9b661905a54ce  config-postmarketos.armhf
-d97c84ad303e2dc5cc65703ddf6f749c7ea005d4fc191a3d197b56ab81150499328665de1ccbd8c467e1409151a37a47a9efcb0588c2c759cf9498361b5134db  config-postmarketos.aarch64
-8d3ea9743190680036d938a9d8ce8602f453152c69404741c70f1584075c111ba120d986b712fc509bbbe7882204292527738de9f03cf871c4911fff80a58d13  config-postmarketos.x86_64
+ab2b16db1aa1bb7550ac0c98215b549ca5f03db80b226effe05121f8175520f3a3accc4fb2b42c7ba1757282e77b844e11d8350d1a83e23821ae4e70da87996c  config-postmarketos.armhf
+d49d5d01adb7f314d5649cf8d7e917eeca9ec286eff2687c6865a7fac46e18227e278ca8965ad29bd99320a676e167256dc1b4212c5702f819e4cd2cf40c33c9  config-postmarketos.aarch64
+4a95d0ddbf7023b41a3d438d439951b9878ce92194d3576c0ef3c1f1f8734331728c2aa03e736908d31bfcfd7c03b2760984714beb39573082916bc50c93c199  config-postmarketos.x86_64
 17c48bb7b4218297bd2be6faa5b6570ce1560a33385237a9962c0884d782c9a722a25a30077b6721d2943a9b98c29dcad6adfef718b0163c559c19a79519319b  0001-rx51-drm-regression-workaround.patch
-392ba115d4728730d73e3c66e07f0230894f44ae71851c26ec9707d5f26bc093a6f7043592232deddf2619d2c7d305e62b168b52a142c59f10970f22bf3fbe7e  patch-4.13.1.xz"
+de55b07e52e88e3bc5af54c619933a81f535393f20712f38000bffa77ded22c7a16e70e43c28daf576bcc6cd3ad39387b8e1f430e3d22222f572113d2345df48  patch-4.13.5.xz"

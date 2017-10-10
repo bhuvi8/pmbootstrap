@@ -172,6 +172,8 @@ def arguments():
     zap.add_argument("-m", "--mismatch-bins", action="store_true", help="also delete"
                      " binary packages that are newer than the corresponding"
                      " package in aports")
+    zap.add_argument("-d", "--distfiles", action="store_true", help="also delete"
+                     " downloaded files cache")
 
     # Action: stats
     stats = sub.add_parser("stats", help="show ccache stats")
@@ -201,6 +203,9 @@ def arguments():
                          " eg. /dev/mmcblk0")
     install.add_argument("--cipher", help="cryptsetup cipher used to"
                          " encrypt the system partition, eg. aes-xts-plain64")
+    install.add_argument("--iter-time", help="cryptsetup iteration time (in"
+                         " miliseconds) to use when encrypting the system"
+                         " partiton")
     install.add_argument("--add", help="comma separated list of packages to be"
                          " added to the rootfs (e.g. 'vim,gcc')")
     install.add_argument("--no-fde", help="do not use full disk encryption",
@@ -211,13 +216,13 @@ def arguments():
     install.add_argument("--android-recovery-zip",
                          help="generate TWRP flashable zip",
                          action="store_true", dest="android_recovery_zip")
-    install.add_argument("--recovery-flash-bootimg",
-                         help="include kernel in recovery flashable zip",
-                         action="store_true", dest="recovery_flash_bootimg")
     install.add_argument("--recovery-install-partition", default="system",
                          help="partition to flash from recovery,"
-                              "eg. external_sd",
+                              " eg. external_sd",
                          dest="recovery_install_partition")
+    install.add_argument("--recovery-no-kernel",
+                         help="do not overwrite the existing kernel",
+                         action="store_false", dest="recovery_flash_kernel")
 
     # Action: menuconfig / parse_apkbuild
     menuconfig = sub.add_parser("menuconfig", help="run menuconfig on"
@@ -246,6 +251,12 @@ def arguments():
                             " arch.")
     for action in [checksum, build, aportgen]:
         action.add_argument("packages", nargs="+")
+
+    # Action: kconfig_check
+    kconfig_check = sub.add_parser("kconfig_check", help="check, whether all"
+                                   " the necessary options are"
+                                   " enabled/disabled in the kernel config")
+    kconfig_check.add_argument("packages", nargs="*")
 
     # Action: challenge
     challenge = sub.add_parser("challenge",
@@ -278,10 +289,16 @@ def arguments():
     qemu.add_argument("--arch", choices=["aarch64", "arm", "x86_64"],
                       help="emulate a different architecture")
     qemu.add_argument("--cmdline", help="override kernel commandline")
+    qemu.add_argument("--image-size", help="set system image size (e.g. 2048M or 2G)")
     qemu.add_argument("-m", "--memory", type=int, default=1024,
                       help="guest RAM (default: 1024)")
     qemu.add_argument("-p", "--port", type=int, default=2222,
                       help="ssh port (default: 2222)")
+    qemu.add_argument("--spice", dest="use_spice",
+                      default=False, action="store_true",
+                      help="connect to the VM using SPICE (NOTE: you need to"
+                           " have a SPICE client installed in your host"
+                           " machine)")
 
     # Use defaults from the user's config file
     args = parser.parse_args()
@@ -313,7 +330,7 @@ def arguments():
                             "find_aport": {}})
 
     # Add and verify the deviceinfo (only after initialization)
-    if args.action != "init":
+    if args.action not in ("init", "config"):
         setattr(args, "deviceinfo", pmb.parse.deviceinfo(args))
         arch = args.deviceinfo["arch"]
         if (arch != args.arch_native and

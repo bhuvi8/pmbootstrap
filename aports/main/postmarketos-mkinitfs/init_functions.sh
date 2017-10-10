@@ -182,7 +182,7 @@ resize_root_filesystem() {
 mount_root_partition() {
 	partition="$(find_root_partition)"
 	echo "Mount root partition ($partition)"
-	mount -w -t ext4 "$partition" /sysroot
+	mount -t ext4 -o ro "$partition" /sysroot
 	if ! [ -e /sysroot/usr ]; then
 		echo "ERROR: unable to mount root partition!"
 		show_splash /splash-mounterror.ppm.gz
@@ -251,7 +251,10 @@ start_udhcpd() {
 	# Create /etc/udhcpd.conf
 	{
 		echo "start 172.16.42.2"
-		echo "end 172.16.42.254"
+		echo "end 172.16.42.2"
+		echo "auto_time 0"
+		echo "decline_time 0"
+		echo "conflict_time 0"
 		echo "lease_file /var/udhcpd.leases"
 		echo "interface $INTERFACE"
 		echo "option subnet 255.255.255.0"
@@ -297,6 +300,22 @@ echo_connect_ssh_message() {
 	echo "Your root partition has been decrypted successfully!"
 	echo "You can connect to your device using SSH in a few seconds:"
 	echo "ssh user@$IP"
+}
+
+start_msm_refresher() {
+	# shellcheck disable=SC2154,SC2086
+	if [ "${deviceinfo_msm_refresher}" = "true" ]; then
+		/usr/sbin/msm-fb-refresher --loop &
+	fi
+}
+
+set_framebuffer_mode() {
+	[ -e "/sys/class/graphics/fb0/modes" ] || return
+	[ -z "$(cat /sys/class/graphics/fb0/mode)" ] || return
+
+	_mode="$(cat /sys/class/graphics/fb0/modes)"
+	echo "Setting framebuffer mode to: $_mode"
+	echo "$_mode" > /sys/class/graphics/fb0/mode
 }
 
 loop_forever() {

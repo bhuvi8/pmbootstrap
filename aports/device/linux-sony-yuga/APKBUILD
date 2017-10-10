@@ -20,7 +20,7 @@ case $pkgver in
 	*.*.*)  _kernver=${pkgver%.*};;
 	*.*) _kernver=$pkgver;;
 esac
-pkgrel=2
+pkgrel=3
 arch="armhf"
 pkgdesc="Sony Xperia Z kernel"
 url="https://github.com/LineageOS/android_kernel_sony_apq8064"
@@ -71,10 +71,10 @@ prepare() {
 	fi
 
 	# gcc6 support
-	cp -v "$srcdir/compiler-gcc6.h" "$ksrcdir/include/linux/" || return 1
+	cp -v "$srcdir/compiler-gcc6.h" "$ksrcdir/include/linux/"
 
 	mkdir -p "$srcdir"/build
-	cp "$srcdir"/$_config "$srcdir"/build/.config || return 1
+	cp "$srcdir"/$_config "$srcdir"/build/.config
 	make -C "$ksrcdir" O="$srcdir"/build ARCH="$_carch" HOSTCC="$HOSTCC" \
 		silentoldconfig
 }
@@ -83,7 +83,7 @@ prepare() {
 
 # this is so we can do: 'abuild menuconfig' to reconfigure kernel
 menuconfig() {
-	cd "$srcdir"/build || return 1
+	cd "$srcdir"/build
 	make ARCH="$_carch" menuconfig
 	cp .config "$startdir"/$_config
 }
@@ -93,8 +93,7 @@ build() {
 	unset LDFLAGS
 
 	make ARCH="$_carch" CC="${CC:-gcc}" \
-		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-Alpine" \
-		|| return 1
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-Alpine"
 }
 
 package() {
@@ -105,7 +104,7 @@ package() {
 		"$pkgdir/usr/share/kernel/$_flavor/kernel.release"
 }
 
-sha512sums="18f083088d8dd09263677c47d96802596bcf70e9e37cf8c9a886afd68225d573a5bef39fba155a9b1ba2074a45258a14aad720fe6af077278a49e40c747d817f  linux-sony-yuga-f164c6d1016cb34ac90c053acbebe6e47fdd400f.tar.gz
+sha512sums="a20ab3f27b43999287ebef5ee150b1652ebc4996a2670079ff86a9ca07bd69555dbd1efb564ff767fb2bf22673dd609817aaded4731b09383d74c68887f545f4  linux-sony-yuga-f164c6d1016cb34ac90c053acbebe6e47fdd400f.tar.gz
 fdb80d0b4c45fbd5e492abb9946752d834a4238e341aa57323e0b28f4a77fdbe5801ad8511c38c8b81ec6b364859f40496060dcca7e7306a0e95e522dcffbb94  config-sony-yuga.armhf
 d80980e9474c82ba0ef1a6903b434d8bd1b092c40367ba543e72d2c119301c8b2d05265740e4104ca1ac5d15f6c4aa49e8776cb44264a9a28dc551e0d1850dcc  compiler-gcc6.h
 ea1d3b5a234fa565e3c1a792de48f4fc4e6023d281d303c8e319c7ef28edc5739ab0e4dea0139a41f0a5c7d03e27921ccaa214fd0ac5c72245a094ce60128864  00_fix_return_address.patch
